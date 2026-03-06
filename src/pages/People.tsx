@@ -1,5 +1,5 @@
 import { useState, useEffect, FormEvent, ChangeEvent } from 'react';
-import { Plus, Edit2, Trash2, X, MessageCircle } from 'lucide-react';
+import { Plus, Edit2, Trash2, X, MessageCircle, Search, Filter } from 'lucide-react';
 import { Person, Role, Orixa } from '../types';
 
 const initialFormData: Omit<Person, 'id'> = {
@@ -37,6 +37,10 @@ export function People() {
   const [formData, setFormData] = useState<Omit<Person, 'id'>>(initialFormData);
   const [cpfError, setCpfError] = useState('');
   const [emailError, setEmailError] = useState('');
+
+  // New states for filtering
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterType, setFilterType] = useState<'all' | 'medium' | 'consulente'>('all');
 
   const validateCPF = (cpf: string) => {
     cpf = cpf.replace(/[^\d]+/g, '');
@@ -210,9 +214,21 @@ export function People() {
     fetchData();
   };
 
+  // Derived state for filtered people
+  const filteredPeople = people.filter(person => {
+    const matchesType = filterType === 'all' || person.type === filterType;
+    const searchLower = searchQuery.toLowerCase();
+    const matchesSearch = 
+      person.full_name.toLowerCase().includes(searchLower) || 
+      (person.social_name && person.social_name.toLowerCase().includes(searchLower)) ||
+      (person.cpf && person.cpf.includes(searchQuery));
+    
+    return matchesType && matchesSearch;
+  });
+
   return (
     <div className="p-8 max-w-7xl mx-auto w-full">
-      <div className="flex justify-between items-center mb-8">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
         <h1 className="text-3xl font-bold text-zinc-900">Médiuns e Consulentes</h1>
         <button
           onClick={() => {
@@ -223,11 +239,48 @@ export function People() {
             fetchData();
             setIsModalOpen(true);
           }}
-          className="flex items-center space-x-2 bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-xl transition-colors"
+          className="flex items-center space-x-2 bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-xl transition-colors whitespace-nowrap"
         >
           <Plus size={20} />
           <span>Nova Pessoa</span>
         </button>
+      </div>
+
+      {/* Filters Section */}
+      <div className="bg-white p-4 rounded-2xl shadow-sm border border-zinc-100 mb-6 flex flex-col md:flex-row gap-4 items-center justify-between">
+        <div className="relative w-full md:w-96">
+          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+            <Search size={18} className="text-zinc-400" />
+          </div>
+          <input
+            type="text"
+            placeholder="Buscar por nome ou CPF..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full pl-10 pr-4 py-2 border border-zinc-200 rounded-xl focus:ring-2 focus:ring-amber-500 outline-none bg-zinc-50 focus:bg-white transition-colors"
+          />
+        </div>
+        
+        <div className="flex bg-zinc-100 p-1 rounded-xl w-full md:w-auto">
+          <button
+            onClick={() => setFilterType('all')}
+            className={`flex-1 md:flex-none px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${filterType === 'all' ? 'bg-white text-zinc-900 shadow-sm' : 'text-zinc-500 hover:text-zinc-700'}`}
+          >
+            Todos
+          </button>
+          <button
+            onClick={() => setFilterType('medium')}
+            className={`flex-1 md:flex-none px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${filterType === 'medium' ? 'bg-white text-zinc-900 shadow-sm' : 'text-zinc-500 hover:text-zinc-700'}`}
+          >
+            Médiuns
+          </button>
+          <button
+            onClick={() => setFilterType('consulente')}
+            className={`flex-1 md:flex-none px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${filterType === 'consulente' ? 'bg-white text-zinc-900 shadow-sm' : 'text-zinc-500 hover:text-zinc-700'}`}
+          >
+            Consulentes
+          </button>
+        </div>
       </div>
 
       <div className="bg-white rounded-2xl shadow-sm border border-zinc-100 overflow-hidden">
@@ -243,7 +296,7 @@ export function People() {
               </tr>
             </thead>
             <tbody>
-              {people.map((person) => (
+              {filteredPeople.map((person) => (
                 <tr key={person.id} className="border-b border-zinc-50 hover:bg-zinc-50/50 transition-colors">
                   <td className="p-4">
                     <div className="font-medium text-zinc-900">{person.full_name}</div>
@@ -285,9 +338,11 @@ export function People() {
                   </td>
                 </tr>
               ))}
-              {people.length === 0 && (
+              {filteredPeople.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="p-8 text-center text-zinc-500">Nenhuma pessoa cadastrada.</td>
+                  <td colSpan={5} className="p-8 text-center text-zinc-500">
+                    {people.length === 0 ? 'Nenhuma pessoa cadastrada.' : 'Nenhum resultado encontrado para o filtro atual.'}
+                  </td>
                 </tr>
               )}
             </tbody>
