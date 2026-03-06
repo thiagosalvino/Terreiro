@@ -1,5 +1,5 @@
 import { useState, useEffect, FormEvent } from 'react';
-import { Plus, Edit2, Trash2, X } from 'lucide-react';
+import { Plus, Edit2, Trash2, Power, X } from 'lucide-react';
 import { Role } from '../types';
 
 export function Roles() {
@@ -7,6 +7,8 @@ export function Roles() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingRole, setEditingRole] = useState<Role | null>(null);
   const [formData, setFormData] = useState({ name: '', active: true });
+  const [roleToDelete, setRoleToDelete] = useState<number | null>(null);
+  const [deleteError, setDeleteError] = useState('');
 
   const fetchRoles = async () => {
     const res = await fetch('/api/roles');
@@ -50,6 +52,28 @@ export function Roles() {
     fetchRoles();
   };
 
+  const handleDelete = (id: number) => {
+    setRoleToDelete(id);
+    setDeleteError('');
+  };
+
+  const confirmDelete = async () => {
+    if (!roleToDelete) return;
+    try {
+      const res = await fetch(`/api/roles/${roleToDelete}`, { method: 'DELETE' });
+      if (!res.ok) {
+        const data = await res.json();
+        setDeleteError(data.error || 'Erro ao excluir.');
+        return;
+      }
+      fetchRoles();
+      setRoleToDelete(null);
+      setDeleteError('');
+    } catch (err) {
+      setDeleteError('Erro de conexão ao tentar excluir.');
+    }
+  };
+
   return (
     <div className="p-8 max-w-7xl mx-auto w-full">
       <div className="flex justify-between items-center mb-8">
@@ -86,10 +110,13 @@ export function Roles() {
                   </span>
                 </td>
                 <td className="p-4 flex justify-end space-x-2">
-                  <button onClick={() => openEdit(role)} className="p-2 text-zinc-400 hover:text-blue-600 transition-colors">
+                  <button onClick={() => openEdit(role)} className="p-2 text-zinc-400 hover:text-blue-600 transition-colors" title="Editar">
                     <Edit2 size={18} />
                   </button>
-                  <button onClick={() => toggleStatus(role)} className="p-2 text-zinc-400 hover:text-red-600 transition-colors" title={role.active ? "Inativar" : "Ativar"}>
+                  <button onClick={() => toggleStatus(role)} className="p-2 text-zinc-400 hover:text-amber-600 transition-colors" title={role.active ? "Inativar" : "Ativar"}>
+                    <Power size={18} />
+                  </button>
+                  <button onClick={() => handleDelete(role.id)} className="p-2 text-zinc-400 hover:text-red-600 transition-colors" title="Excluir">
                     <Trash2 size={18} />
                   </button>
                 </td>
@@ -154,6 +181,20 @@ export function Roles() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {roleToDelete && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] p-4">
+          <div className="bg-white p-6 rounded-2xl shadow-xl max-w-sm w-full">
+            <h3 className="text-lg font-bold text-zinc-900 mb-2">Confirmar Exclusão</h3>
+            <p className="text-zinc-600 mb-4">Tem certeza que deseja excluir este cargo? Esta ação não pode ser desfeita.</p>
+            {deleteError && <p className="text-red-500 text-sm mb-4 p-3 bg-red-50 rounded-lg">{deleteError}</p>}
+            <div className="flex justify-end space-x-3">
+              <button onClick={() => setRoleToDelete(null)} className="px-4 py-2 text-zinc-600 hover:bg-zinc-100 rounded-xl transition-colors font-medium">Cancelar</button>
+              <button onClick={confirmDelete} className="px-4 py-2 bg-red-600 text-white rounded-xl hover:bg-red-700 transition-colors font-medium">Excluir</button>
+            </div>
           </div>
         </div>
       )}

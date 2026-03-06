@@ -1,5 +1,5 @@
 import { useState, useEffect, FormEvent, ChangeEvent } from 'react';
-import { Plus, Edit2, Trash2, X, MessageCircle, Search, Filter } from 'lucide-react';
+import { Plus, Edit2, Trash2, Power, X, MessageCircle, Search, Filter } from 'lucide-react';
 import { Person, Role, Orixa } from '../types';
 
 const initialFormData: Omit<Person, 'id'> = {
@@ -38,6 +38,8 @@ export function People() {
   const [cpfError, setCpfError] = useState('');
   const [emailError, setEmailError] = useState('');
   const [noNumber, setNoNumber] = useState(false);
+  const [personToDelete, setPersonToDelete] = useState<number | null>(null);
+  const [deleteError, setDeleteError] = useState('');
 
   // New states for filtering
   const [searchQuery, setSearchQuery] = useState('');
@@ -230,6 +232,28 @@ export function People() {
     fetchData();
   };
 
+  const handleDelete = (id: number) => {
+    setPersonToDelete(id);
+    setDeleteError('');
+  };
+
+  const confirmDelete = async () => {
+    if (!personToDelete) return;
+    try {
+      const res = await fetch(`/api/people/${personToDelete}`, { method: 'DELETE' });
+      if (!res.ok) {
+        const data = await res.json();
+        setDeleteError(data.error || 'Erro ao excluir.');
+        return;
+      }
+      fetchData();
+      setPersonToDelete(null);
+      setDeleteError('');
+    } catch (err) {
+      setDeleteError('Erro de conexão ao tentar excluir.');
+    }
+  };
+
   // Derived state for filtered people
   const filteredPeople = people.filter(person => {
     const matchesType = filterType === 'all' || person.type === filterType;
@@ -346,10 +370,13 @@ export function People() {
                     </span>
                   </td>
                   <td className="p-4 flex justify-end space-x-2">
-                    <button onClick={() => openEdit(person)} className="p-2 text-zinc-400 hover:text-blue-600 transition-colors">
+                    <button onClick={() => openEdit(person)} className="p-2 text-zinc-400 hover:text-blue-600 transition-colors" title="Editar">
                       <Edit2 size={18} />
                     </button>
-                    <button onClick={() => toggleStatus(person)} className="p-2 text-zinc-400 hover:text-red-600 transition-colors" title={person.active ? "Inativar" : "Ativar"}>
+                    <button onClick={() => toggleStatus(person)} className="p-2 text-zinc-400 hover:text-amber-600 transition-colors" title={person.active ? "Inativar" : "Ativar"}>
+                      <Power size={18} />
+                    </button>
+                    <button onClick={() => handleDelete(person.id)} className="p-2 text-zinc-400 hover:text-red-600 transition-colors" title="Excluir">
                       <Trash2 size={18} />
                     </button>
                   </td>
@@ -624,6 +651,20 @@ export function People() {
                 </div>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {personToDelete && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] p-4">
+          <div className="bg-white p-6 rounded-2xl shadow-xl max-w-sm w-full">
+            <h3 className="text-lg font-bold text-zinc-900 mb-2">Confirmar Exclusão</h3>
+            <p className="text-zinc-600 mb-4">Tem certeza que deseja excluir esta pessoa? Esta ação não pode ser desfeita.</p>
+            {deleteError && <p className="text-red-500 text-sm mb-4 p-3 bg-red-50 rounded-lg">{deleteError}</p>}
+            <div className="flex justify-end space-x-3">
+              <button onClick={() => setPersonToDelete(null)} className="px-4 py-2 text-zinc-600 hover:bg-zinc-100 rounded-xl transition-colors font-medium">Cancelar</button>
+              <button onClick={confirmDelete} className="px-4 py-2 bg-red-600 text-white rounded-xl hover:bg-red-700 transition-colors font-medium">Excluir</button>
+            </div>
           </div>
         </div>
       )}

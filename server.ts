@@ -92,6 +92,15 @@ async function startServer() {
     res.json({ success: true });
   });
 
+  app.delete('/api/roles/:id', (req, res) => {
+    try {
+      db.prepare('DELETE FROM roles WHERE id = ?').run(Number(req.params.id));
+      res.json({ success: true });
+    } catch (e: any) {
+      res.status(400).json({ error: 'Não é possível excluir este cargo pois existem pessoas vinculadas a ele.' });
+    }
+  });
+
   app.get('/api/orixas', (req, res) => {
     const orixas = db.prepare('SELECT * FROM orixas').all();
     res.json(orixas);
@@ -107,6 +116,15 @@ async function startServer() {
     const { name, active } = req.body;
     db.prepare('UPDATE orixas SET name = ?, active = ? WHERE id = ?').run(name, active ? 1 : 0, req.params.id);
     res.json({ success: true });
+  });
+
+  app.delete('/api/orixas/:id', (req, res) => {
+    try {
+      db.prepare('DELETE FROM orixas WHERE id = ?').run(Number(req.params.id));
+      res.json({ success: true });
+    } catch (e: any) {
+      res.status(400).json({ error: 'Não é possível excluir este orixá pois existem pessoas vinculadas a ele.' });
+    }
   });
 
   app.get('/api/people', (req, res) => {
@@ -171,6 +189,15 @@ async function startServer() {
       req.params.id
     );
     res.json({ success: true });
+  });
+
+  app.delete('/api/people/:id', (req, res) => {
+    try {
+      db.prepare('DELETE FROM people WHERE id = ?').run(Number(req.params.id));
+      res.json({ success: true });
+    } catch (e: any) {
+      res.status(400).json({ error: 'Erro ao excluir pessoa.' });
+    }
   });
 
   // Vite middleware for development
