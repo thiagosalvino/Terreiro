@@ -4,7 +4,7 @@ import { LayoutDashboard, Users, UserCog, Sparkles, Menu, X } from 'lucide-react
 import { cn } from '../lib/utils';
 
 export function Sidebar() {
-  const [isOpen, setIsOpen] = useState(true);
+  const [isOpen, setIsOpen] = useState(false);
 
   const navItems = [
     { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
@@ -15,9 +15,17 @@ export function Sidebar() {
 
   return (
     <>
-      {/* Mobile toggle */}
+      {/* Overlay for all screen sizes when sidebar is open */}
+      {isOpen && (
+        <div 
+          className="fixed inset-0 z-30 bg-black/50 backdrop-blur-sm transition-opacity"
+          onClick={() => setIsOpen(false)}
+        />
+      )}
+
+      {/* Floating toggle button for all screen sizes */}
       <button
-        className="md:hidden fixed top-4 left-4 z-50 p-2 bg-white rounded-md shadow-md"
+        className="fixed bottom-6 right-6 z-50 p-3 bg-amber-500 text-white rounded-full shadow-lg hover:bg-amber-600 transition-colors"
         onClick={() => setIsOpen(!isOpen)}
       >
         {isOpen ? <X size={24} /> : <Menu size={24} />}
@@ -26,15 +34,15 @@ export function Sidebar() {
       {/* Sidebar */}
       <div
         className={cn(
-          "fixed md:static inset-y-0 left-0 z-40 w-64 bg-zinc-900 text-zinc-100 transition-transform duration-300 ease-in-out flex flex-col",
-          isOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0 md:w-20"
+          "fixed inset-y-0 left-0 z-40 w-64 bg-zinc-900 text-zinc-100 transition-transform duration-300 ease-in-out flex flex-col shadow-2xl",
+          isOpen ? "translate-x-0" : "-translate-x-full"
         )}
       >
         <div className="flex items-center justify-center h-16 border-b border-zinc-800">
-          <h1 className={cn("font-bold text-xl tracking-tight transition-opacity", !isOpen && "md:hidden")}>
+          <h1 className="font-bold text-xl tracking-tight transition-opacity">
             Terreiro<span className="text-amber-500">App</span>
           </h1>
-          <Sparkles className={cn("text-amber-500 hidden", !isOpen && "md:block")} />
+          <Sparkles className="text-amber-500 hidden" />
         </div>
 
         <nav className="flex-1 px-4 py-6 space-y-2">
@@ -42,6 +50,7 @@ export function Sidebar() {
             <NavLink
               key={item.to}
               to={item.to}
+              onClick={() => setIsOpen(false)}
               className={({ isActive }) =>
                 cn(
                   "flex items-center px-4 py-3 rounded-xl transition-colors",
@@ -52,21 +61,12 @@ export function Sidebar() {
               }
             >
               <item.icon size={20} className="min-w-[20px]" />
-              <span className={cn("ml-3 font-medium transition-opacity", !isOpen && "md:hidden")}>
+              <span className="ml-3 font-medium transition-opacity">
                 {item.label}
               </span>
             </NavLink>
           ))}
         </nav>
-
-        <div className="p-4 border-t border-zinc-800">
-          <button
-            onClick={() => setIsOpen(!isOpen)}
-            className="hidden md:flex w-full items-center justify-center p-2 text-zinc-400 hover:text-zinc-100 transition-colors"
-          >
-            {isOpen ? <X size={20} /> : <Menu size={20} />}
-          </button>
-        </div>
       </div>
     </>
   );
