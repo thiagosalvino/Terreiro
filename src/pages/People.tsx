@@ -37,6 +37,7 @@ export function People() {
   const [formData, setFormData] = useState<Omit<Person, 'id'>>(initialFormData);
   const [cpfError, setCpfError] = useState('');
   const [emailError, setEmailError] = useState('');
+  const [noNumber, setNoNumber] = useState(false);
 
   // New states for filtering
   const [searchQuery, setSearchQuery] = useState('');
@@ -154,16 +155,30 @@ export function People() {
     const method = editingPerson ? 'PUT' : 'POST';
     const url = editingPerson ? `/api/people/${editingPerson.id}` : '/api/people';
     
-    await fetch(url, {
-      method,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(formData),
-    });
-    
-    setIsModalOpen(false);
-    setEditingPerson(null);
-    setFormData(initialFormData);
-    fetchData();
+    try {
+      const res = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formData),
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        if (data.error && data.error.includes('CPF')) {
+          setCpfError(data.error);
+          return; // Stop execution if there's a CPF error from backend
+        }
+        throw new Error(data.error || 'Erro ao salvar cadastro');
+      }
+      
+      setIsModalOpen(false);
+      setEditingPerson(null);
+      setFormData(initialFormData);
+      fetchData();
+    } catch (err) {
+      console.error(err);
+      alert('Ocorreu um erro ao salvar o cadastro. Tente novamente.');
+    }
   };
 
   const openEdit = async (person: Person) => {
@@ -171,6 +186,7 @@ export function People() {
     setCpfError('');
     setEmailError('');
     setEditingPerson(person);
+    setNoNumber(person.number === 'SN' || person.number === 'S/N');
     setFormData({
       type: person.type,
       full_name: person.full_name,
@@ -236,6 +252,7 @@ export function People() {
             setEmailError('');
             setEditingPerson(null);
             setFormData(initialFormData);
+            setNoNumber(false);
             fetchData();
             setIsModalOpen(true);
           }}
@@ -436,8 +453,36 @@ export function People() {
                     <input type="text" value={formData.address || ''} onChange={(e) => setFormData({ ...formData, address: e.target.value })} className="w-full px-4 py-2 border border-zinc-200 rounded-xl focus:ring-2 focus:ring-amber-500 outline-none" />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-zinc-700 mb-1">Número</label>
-                    <input type="text" value={formData.number || ''} onChange={(e) => setFormData({ ...formData, number: e.target.value })} className="w-full px-4 py-2 border border-zinc-200 rounded-xl focus:ring-2 focus:ring-amber-500 outline-none" />
+                    <div className="flex justify-between items-center mb-1">
+                      <label className="block text-sm font-medium text-zinc-700">Número</label>
+                      <label className="flex items-center space-x-1 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={noNumber}
+                          onChange={(e) => {
+                            setNoNumber(e.target.checked);
+                            if (e.target.checked) {
+                              setFormData({ ...formData, number: 'SN' });
+                            } else {
+                              setFormData({ ...formData, number: '' });
+                            }
+                          }}
+                          className="w-3 h-3 text-amber-600 focus:ring-amber-500 rounded"
+                        />
+                        <span className="text-xs text-zinc-500">Sem número</span>
+                      </label>
+                    </div>
+                    <input 
+                      type="text" 
+                      value={noNumber ? '' : (formData.number || '')} 
+                      onChange={(e) => {
+                        const val = e.target.value.replace(/\D/g, ''); // Allow only numbers
+                        setFormData({ ...formData, number: val });
+                      }} 
+                      disabled={noNumber}
+                      placeholder={noNumber ? "S/N" : ""}
+                      className="w-full px-4 py-2 border border-zinc-200 rounded-xl focus:ring-2 focus:ring-amber-500 outline-none disabled:bg-zinc-100 disabled:text-zinc-400" 
+                    />
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-zinc-700 mb-1">Complemento</label>
@@ -464,8 +509,8 @@ export function People() {
                   <h3 className="text-lg font-semibold text-zinc-800 mb-4">Dados do Médium</h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-zinc-700 mb-1">Data de Entrada na Casa</label>
-                      <input type="date" value={formData.entry_date || ''} onChange={(e) => setFormData({ ...formData, entry_date: e.target.value })} className="w-full px-4 py-2 border border-zinc-200 rounded-xl focus:ring-2 focus:ring-amber-500 outline-none bg-white" />
+                      <label className="block text-sm font-medium text-zinc-700 mb-1">Data de Entrada na Casa *</label>
+                      <input type="date" required value={formData.entry_date || ''} onChange={(e) => setFormData({ ...formData, entry_date: e.target.value })} className="w-full px-4 py-2 border border-zinc-200 rounded-xl focus:ring-2 focus:ring-amber-500 outline-none bg-white" />
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-zinc-700 mb-1">Cargo na Casa</label>
@@ -504,8 +549,8 @@ export function People() {
                       </select>
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-zinc-700 mb-1">Participação</label>
-                      <select value={formData.participation || ''} onChange={(e) => setFormData({ ...formData, participation: e.target.value as any })} className="w-full px-4 py-2 border border-zinc-200 rounded-xl focus:ring-2 focus:ring-amber-500 outline-none bg-white">
+                      <label className="block text-sm font-medium text-zinc-700 mb-1">Participação *</label>
+                      <select required value={formData.participation || ''} onChange={(e) => setFormData({ ...formData, participation: e.target.value as any })} className="w-full px-4 py-2 border border-zinc-200 rounded-xl focus:ring-2 focus:ring-amber-500 outline-none bg-white">
                         <option value="">Selecione</option>
                         <option value="umbanda">Umbanda</option>
                         <option value="candomble">Candomblé</option>

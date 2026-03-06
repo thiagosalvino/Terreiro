@@ -116,6 +116,15 @@ async function startServer() {
 
   app.post('/api/people', (req, res) => {
     const p = req.body;
+    
+    // Check for duplicate CPF
+    if (p.cpf) {
+      const existing = db.prepare('SELECT id FROM people WHERE cpf = ?').get(p.cpf);
+      if (existing) {
+        return res.status(400).json({ error: 'Este CPF já está cadastrado no sistema.' });
+      }
+    }
+
     const now = new Date().toISOString();
     const user = 'Admin'; // Mocked user
     const info = db.prepare(`
@@ -136,6 +145,15 @@ async function startServer() {
 
   app.put('/api/people/:id', (req, res) => {
     const p = req.body;
+    
+    // Check for duplicate CPF (excluding the current person)
+    if (p.cpf) {
+      const existing = db.prepare('SELECT id FROM people WHERE cpf = ? AND id != ?').get(p.cpf, req.params.id);
+      if (existing) {
+        return res.status(400).json({ error: 'Este CPF já está cadastrado no sistema.' });
+      }
+    }
+
     const now = new Date().toISOString();
     const user = 'Admin'; // Mocked user
     db.prepare(`
