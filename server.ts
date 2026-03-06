@@ -1,8 +1,12 @@
 import express from 'express';
 import { createServer as createViteServer } from 'vite';
 import Database from 'better-sqlite3';
+import path from 'path';
 
-const db = new Database('database.sqlite');
+// Usa a variável de ambiente DB_PATH se existir (para Render/Railway com discos persistentes), 
+// caso contrário, usa o arquivo local 'database.sqlite'
+const dbPath = process.env.DB_PATH || 'database.sqlite';
+const db = new Database(dbPath);
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS roles (
@@ -66,7 +70,7 @@ addColumn('people', 'neighborhood', 'TEXT');
 
 async function startServer() {
   const app = express();
-  const PORT = 3000;
+  const PORT = process.env.PORT ? parseInt(process.env.PORT) : 3000;
 
   app.use(express.json());
 
@@ -160,6 +164,9 @@ async function startServer() {
     app.use(vite.middlewares);
   } else {
     app.use(express.static('dist'));
+    app.get('*', (req, res) => {
+      res.sendFile(path.resolve('dist/index.html'));
+    });
   }
 
   app.listen(PORT, '0.0.0.0', () => {
