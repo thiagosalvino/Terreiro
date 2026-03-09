@@ -43,11 +43,8 @@ export function Login() {
     <div className="min-h-screen flex items-center justify-center bg-zinc-50 p-4">
       <div className="max-w-md w-full bg-white rounded-3xl shadow-xl border border-zinc-100 p-8">
         <div className="text-center mb-8">
-          <div className="bg-amber-100 w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4">
-            <Lock className="text-amber-600" size={32} />
-          </div>
-          <h1 className="text-2xl font-bold text-zinc-900">Acesso ao Sistema</h1>
-          <p className="text-zinc-500 mt-2">Entre com suas credenciais para continuar</p>
+          <h1 className="text-4xl font-black text-amber-600 tracking-tighter mb-2">TerreiroApp</h1>
+          <p className="text-zinc-500">Entre com suas credenciais para continuar</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-6">
