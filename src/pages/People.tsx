@@ -473,8 +473,8 @@ export function People() {
                 <h3 className="text-lg font-semibold text-zinc-800 mb-4">Endereço</h3>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-zinc-700 mb-1">CEP</label>
-                    <input type="text" value={formData.zip_code || ''} onChange={handleCEPChange} placeholder="00000-000" className="w-full px-4 py-2 border border-zinc-200 rounded-xl focus:ring-2 focus:ring-amber-500 outline-none" />
+                    <label className="block text-sm font-medium text-zinc-700 mb-1">CEP *</label>
+                    <input type="text" required value={formData.zip_code || ''} onChange={handleCEPChange} placeholder="00000-000" className="w-full px-4 py-2 border border-zinc-200 rounded-xl focus:ring-2 focus:ring-amber-500 outline-none" />
                   </div>
                   <div className="md:col-span-2">
                     <label className="block text-sm font-medium text-zinc-700 mb-1">Endereço</label>
@@ -513,8 +513,8 @@ export function People() {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-zinc-700 mb-1">Complemento</label>
-                    <input type="text" value={formData.complement || ''} onChange={(e) => setFormData({ ...formData, complement: e.target.value })} className="w-full px-4 py-2 border border-zinc-200 rounded-xl focus:ring-2 focus:ring-amber-500 outline-none" />
+                    <label className="block text-sm font-medium text-zinc-700 mb-1">Complemento *</label>
+                    <input type="text" required value={formData.complement || ''} onChange={(e) => setFormData({ ...formData, complement: e.target.value })} className="w-full px-4 py-2 border border-zinc-200 rounded-xl focus:ring-2 focus:ring-amber-500 outline-none" />
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-zinc-700 mb-1">Bairro</label>

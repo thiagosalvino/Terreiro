@@ -1,14 +1,22 @@
 import { useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, Users, UserCog, Sparkles, Menu, X, LogOut, User as UserIcon } from 'lucide-react';
+import { LayoutDashboard, Users, UserCog, Sparkles, Menu, X, LogOut, User as UserIcon, Pin, PinOff } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { User } from '../types';
 
-export function Sidebar() {
+interface SidebarProps {
+  isPinned: boolean;
+  onPinToggle: () => void;
+}
+
+export function Sidebar({ isPinned, onPinToggle }: SidebarProps) {
   const [isOpen, setIsOpen] = useState(false);
   const navigate = useNavigate();
   const userJson = localStorage.getItem('user');
   const user: User | null = userJson ? JSON.parse(userJson) : null;
+
+  const effectiveOpen = isPinned || isOpen;
+  const showOverlay = !isPinned && isOpen;
 
   const handleLogout = () => {
     localStorage.removeItem('token');
@@ -25,8 +33,8 @@ export function Sidebar() {
 
   return (
     <>
-      {/* Overlay for all screen sizes when sidebar is open */}
-      {isOpen && (
+      {/* Overlay for all screen sizes when sidebar is open and not pinned */}
+      {showOverlay && (
         <div 
           className="fixed inset-0 z-30 bg-black/50 backdrop-blur-sm transition-opacity"
           onClick={() => setIsOpen(false)}
@@ -34,24 +42,36 @@ export function Sidebar() {
       )}
 
       {/* Floating toggle button for all screen sizes */}
-      <button
-        className="fixed bottom-6 right-6 z-50 p-3 bg-amber-500 text-white rounded-full shadow-lg hover:bg-amber-600 transition-colors"
-        onClick={() => setIsOpen(!isOpen)}
-      >
-        {isOpen ? <X size={24} /> : <Menu size={24} />}
-      </button>
+      {!isPinned && (
+        <button
+          className="fixed bottom-6 right-6 z-50 p-3 bg-amber-500 text-white rounded-full shadow-lg hover:bg-amber-600 transition-colors"
+          onClick={() => setIsOpen(!isOpen)}
+        >
+          {isOpen ? <X size={24} /> : <Menu size={24} />}
+        </button>
+      )}
 
       {/* Sidebar */}
       <div
         className={cn(
           "fixed inset-y-0 left-0 z-40 w-64 bg-zinc-900 text-zinc-100 transition-transform duration-300 ease-in-out flex flex-col shadow-2xl",
-          isOpen ? "translate-x-0" : "-translate-x-full"
+          effectiveOpen ? "translate-x-0" : "-translate-x-full"
         )}
       >
-        <div className="flex items-center justify-center h-16 border-b border-zinc-800">
+        <div className="flex items-center justify-between px-6 h-16 border-b border-zinc-800">
           <h1 className="font-bold text-xl tracking-tight transition-opacity">
             Terreiro<span className="text-amber-500">App</span>
           </h1>
+          <button 
+            onClick={onPinToggle}
+            className={cn(
+              "p-1.5 rounded-lg transition-colors hover:bg-zinc-800",
+              isPinned ? "text-amber-500 bg-amber-500/10" : "text-zinc-500"
+            )}
+            title={isPinned ? "Desafixar menu" : "Fixar menu"}
+          >
+            {isPinned ? <PinOff size={18} /> : <Pin size={18} />}
+          </button>
         </div>
 
         <nav className="flex-1 px-4 py-6 space-y-2">

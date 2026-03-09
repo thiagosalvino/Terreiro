@@ -40,10 +40,13 @@ export function Login() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-zinc-50 p-4">
+    <div className="min-h-screen flex items-center justify-center bg-zinc-100 p-4">
       <div className="max-w-md w-full bg-white rounded-3xl shadow-xl border border-zinc-100 p-8">
         <div className="text-center mb-8">
-          <h1 className="text-4xl font-black text-amber-600 tracking-tighter mb-2">TerreiroApp</h1>
+          <h1 className="text-4xl font-black tracking-tighter mb-2">
+            <span className="text-zinc-900">Terreiro</span>
+            <span className="text-amber-600">App</span>
+          </h1>
           <p className="text-zinc-500">Entre com suas credenciais para continuar</p>
         </div>
 
