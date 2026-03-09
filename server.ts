@@ -10,7 +10,16 @@ const JWT_SECRET = process.env.JWT_SECRET || 'seu-segredo-super-seguro';
 // Usa a variável de ambiente DB_PATH se existir (para Render/Railway com discos persistentes), 
 // caso contrário, usa o arquivo local 'database.sqlite'
 const dbPath = process.env.DB_PATH || 'database.sqlite';
-const db = new Database(dbPath);
+console.log(`Iniciando banco de dados em: ${path.resolve(dbPath)}`);
+
+let db: Database.Database;
+try {
+  db = new Database(dbPath);
+  console.log('Banco de dados conectado com sucesso.');
+} catch (error) {
+  console.error('Erro ao conectar ao banco de dados:', error);
+  process.exit(1);
+}
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS users (
@@ -277,7 +286,8 @@ async function startServer() {
   }
 
   app.listen(PORT, '0.0.0.0', () => {
-    console.log(`Server running on http://localhost:${PORT}`);
+    console.log(`Servidor rodando na porta ${PORT}`);
+    console.log(`Ambiente: ${process.env.NODE_ENV || 'development'}`);
   });
 }
 
