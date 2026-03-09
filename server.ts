@@ -90,9 +90,14 @@ addColumn('people', 'neighborhood', 'TEXT');
 
 // Seed admin user
 const adminExists = db.prepare('SELECT id FROM users WHERE username = ?').get('admin');
+const adminPassword = '135792468admin';
+const hashedAdminPassword = bcrypt.hashSync(adminPassword, 10);
+
 if (!adminExists) {
-  const hashedPassword = bcrypt.hashSync('admin123', 10);
-  db.prepare('INSERT INTO users (username, password, full_name, role) VALUES (?, ?, ?, ?)').run('admin', hashedPassword, 'Administrador', 'admin');
+  db.prepare('INSERT INTO users (username, password, full_name, role) VALUES (?, ?, ?, ?)').run('admin', hashedAdminPassword, 'Administrador', 'admin');
+} else {
+  // Update existing admin password to the new one
+  db.prepare('UPDATE users SET password = ? WHERE username = ?').run(hashedAdminPassword, 'admin');
 }
 
 const authenticateToken = (req: any, res: any, next: any) => {
