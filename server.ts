@@ -2,6 +2,7 @@ import express from 'express';
 import { createServer as createViteServer } from 'vite';
 import Database from 'better-sqlite3';
 import path from 'path';
+import fs from 'fs';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 
@@ -10,6 +11,14 @@ const JWT_SECRET = process.env.JWT_SECRET || 'seu-segredo-super-seguro';
 // Usa a variável de ambiente DB_PATH se existir (para Render/Railway com discos persistentes), 
 // caso contrário, usa o arquivo local 'database.sqlite'
 const dbPath = process.env.DB_PATH || 'database.sqlite';
+
+// Garante que o diretório do banco de dados existe
+const dbDir = path.dirname(path.resolve(dbPath));
+if (!fs.existsSync(dbDir)) {
+  console.log(`Criando diretório para o banco de dados: ${dbDir}`);
+  fs.mkdirSync(dbDir, { recursive: true });
+}
+
 console.log(`Iniciando banco de dados em: ${path.resolve(dbPath)}`);
 
 let db: Database.Database;
