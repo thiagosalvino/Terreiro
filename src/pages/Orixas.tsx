@@ -1,6 +1,7 @@
 import { useState, useEffect, FormEvent } from 'react';
 import { Plus, Edit2, Trash2, Power, X } from 'lucide-react';
 import { Orixa } from '../types';
+import { apiFetch } from '../lib/api';
 
 export function Orixas() {
   const [orixas, setOrixas] = useState<Orixa[]>([]);
@@ -11,7 +12,7 @@ export function Orixas() {
   const [deleteError, setDeleteError] = useState('');
 
   const fetchOrixas = async () => {
-    const res = await fetch('/api/orixas');
+    const res = await apiFetch('/api/orixas');
     const data = await res.json();
     setOrixas(data);
   };
@@ -25,7 +26,7 @@ export function Orixas() {
     const method = editingOrixa ? 'PUT' : 'POST';
     const url = editingOrixa ? `/api/orixas/${editingOrixa.id}` : '/api/orixas';
     
-    await fetch(url, {
+    await apiFetch(url, {
       method,
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(formData),
@@ -44,7 +45,7 @@ export function Orixas() {
   };
 
   const toggleStatus = async (orixa: Orixa) => {
-    await fetch(`/api/orixas/${orixa.id}`, {
+    await apiFetch(`/api/orixas/${orixa.id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name: orixa.name, active: orixa.active === 1 ? false : true }),
@@ -60,7 +61,7 @@ export function Orixas() {
   const confirmDelete = async () => {
     if (!orixaToDelete) return;
     try {
-      const res = await fetch(`/api/orixas/${orixaToDelete}`, { method: 'DELETE' });
+      const res = await apiFetch(`/api/orixas/${orixaToDelete}`, { method: 'DELETE' });
       if (!res.ok) {
         const data = await res.json();
         setDeleteError(data.error || 'Erro ao excluir.');

@@ -1,6 +1,7 @@
 import { useState, useEffect, FormEvent, ChangeEvent } from 'react';
 import { Plus, Edit2, Trash2, Power, X, MessageCircle, Search, Filter } from 'lucide-react';
 import { Person, Role, Orixa } from '../types';
+import { apiFetch } from '../lib/api';
 
 const initialFormData: Omit<Person, 'id'> = {
   type: 'consulente',
@@ -121,9 +122,9 @@ export function People() {
 
   const fetchData = async () => {
     const [pRes, rRes, oRes] = await Promise.all([
-      fetch('/api/people'),
-      fetch('/api/roles'),
-      fetch('/api/orixas')
+      apiFetch('/api/people'),
+      apiFetch('/api/roles'),
+      apiFetch('/api/orixas')
     ]);
     setPeople(await pRes.json());
     setRoles(await rRes.json());
@@ -158,7 +159,7 @@ export function People() {
     const url = editingPerson ? `/api/people/${editingPerson.id}` : '/api/people';
     
     try {
-      const res = await fetch(url, {
+      const res = await apiFetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formData),
@@ -224,7 +225,7 @@ export function People() {
       updatedPerson.inactive_date = null;
     }
     
-    await fetch(`/api/people/${person.id}`, {
+    await apiFetch(`/api/people/${person.id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(updatedPerson),
@@ -240,7 +241,7 @@ export function People() {
   const confirmDelete = async () => {
     if (!personToDelete) return;
     try {
-      const res = await fetch(`/api/people/${personToDelete}`, { method: 'DELETE' });
+      const res = await apiFetch(`/api/people/${personToDelete}`, { method: 'DELETE' });
       if (!res.ok) {
         const data = await res.json();
         setDeleteError(data.error || 'Erro ao excluir.');

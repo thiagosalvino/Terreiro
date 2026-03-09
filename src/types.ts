@@ -39,3 +39,10 @@ export interface Person {
   created_by?: string;
   updated_by?: string;
 }
+
+export interface User {
+  id: number;
+  username: string;
+  full_name: string;
+  role: 'admin' | 'user';
+}

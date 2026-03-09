@@ -2,6 +2,10 @@ import express from 'express';
 import { createServer as createViteServer } from 'vite';
 import Database from 'better-sqlite3';
 import path from 'path';
+import bcrypt from 'bcryptjs';
+import jwt from 'jsonwebtoken';
+
+const JWT_SECRET = process.env.JWT_SECRET || 'seu-segredo-super-seguro';
 
 // Usa a variável de ambiente DB_PATH se existir (para Render/Railway com discos persistentes), 
 // caso contrário, usa o arquivo local 'database.sqlite'
@@ -9,6 +13,13 @@ const dbPath = process.env.DB_PATH || 'database.sqlite';
 const db = new Database(dbPath);
 
 db.exec(`
+  CREATE TABLE IF NOT EXISTS users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    username TEXT UNIQUE NOT NULL,
+    password TEXT NOT NULL,
+    full_name TEXT NOT NULL,
+    role TEXT DEFAULT 'user'
+  );
   CREATE TABLE IF NOT EXISTS roles (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
@@ -68,31 +79,82 @@ addColumn('people', 'created_by', 'TEXT');
 addColumn('people', 'updated_by', 'TEXT');
 addColumn('people', 'neighborhood', 'TEXT');
 
+// Seed admin user
+const adminExists = db.prepare('SELECT id FROM users WHERE username = ?').get('admin');
+if (!adminExists) {
+  const hashedPassword = bcrypt.hashSync('admin123', 10);
+  db.prepare('INSERT INTO users (username, password, full_name, role) VALUES (?, ?, ?, ?)').run('admin', hashedPassword, 'Administrador', 'admin');
+}
+
+const authenticateToken = (req: any, res: any, next: any) => {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+
+  if (!token) return res.sendStatus(401);
+
+  jwt.verify(token, JWT_SECRET, (err: any, user: any) => {
+    if (err) return res.sendStatus(403);
+    req.user = user;
+    next();
+  });
+};
+
 async function startServer() {
   const app = express();
   const PORT = process.env.PORT ? parseInt(process.env.PORT) : 3000;
 
   app.use(express.json());
 
+  // Auth Route
+  app.post('/api/login', (req, res) => {
+    const { username, password } = req.body;
+    const user = db.prepare('SELECT * FROM users WHERE username = ?').get(username);
+
+    if (!user) {
+      return res.status(401).json({ error: 'Este usuário não existe ou não está cadastrado no sistema' });
+    }
+
+    if (!bcrypt.compareSync(password, user.password)) {
+      return res.status(401).json({ error: 'Usuário ou senha inválidos' });
+    }
+
+    const token = jwt.sign({ 
+      id: user.id, 
+      username: user.username, 
+      role: user.role, 
+      full_name: user.full_name 
+    }, JWT_SECRET, { expiresIn: '24h' });
+
+    res.json({ 
+      token, 
+      user: { 
+        id: user.id, 
+        username: user.username, 
+        role: user.role, 
+        full_name: user.full_name 
+      } 
+    });
+  });
+
   // API Routes
-  app.get('/api/roles', (req, res) => {
+  app.get('/api/roles', authenticateToken, (req, res) => {
     const roles = db.prepare('SELECT * FROM roles').all();
     res.json(roles);
   });
 
-  app.post('/api/roles', (req, res) => {
+  app.post('/api/roles', authenticateToken, (req, res) => {
     const { name, active } = req.body;
     const info = db.prepare('INSERT INTO roles (name, active) VALUES (?, ?)').run(name, active ? 1 : 0);
     res.json({ id: info.lastInsertRowid });
   });
 
-  app.put('/api/roles/:id', (req, res) => {
+  app.put('/api/roles/:id', authenticateToken, (req, res) => {
     const { name, active } = req.body;
     db.prepare('UPDATE roles SET name = ?, active = ? WHERE id = ?').run(name, active ? 1 : 0, req.params.id);
     res.json({ success: true });
   });
 
-  app.delete('/api/roles/:id', (req, res) => {
+  app.delete('/api/roles/:id', authenticateToken, (req, res) => {
     try {
       db.prepare('DELETE FROM roles WHERE id = ?').run(Number(req.params.id));
       res.json({ success: true });
@@ -101,24 +163,24 @@ async function startServer() {
     }
   });
 
-  app.get('/api/orixas', (req, res) => {
+  app.get('/api/orixas', authenticateToken, (req, res) => {
     const orixas = db.prepare('SELECT * FROM orixas').all();
     res.json(orixas);
   });
 
-  app.post('/api/orixas', (req, res) => {
+  app.post('/api/orixas', authenticateToken, (req, res) => {
     const { name, active } = req.body;
     const info = db.prepare('INSERT INTO orixas (name, active) VALUES (?, ?)').run(name, active ? 1 : 0);
     res.json({ id: info.lastInsertRowid });
   });
 
-  app.put('/api/orixas/:id', (req, res) => {
+  app.put('/api/orixas/:id', authenticateToken, (req, res) => {
     const { name, active } = req.body;
     db.prepare('UPDATE orixas SET name = ?, active = ? WHERE id = ?').run(name, active ? 1 : 0, req.params.id);
     res.json({ success: true });
   });
 
-  app.delete('/api/orixas/:id', (req, res) => {
+  app.delete('/api/orixas/:id', authenticateToken, (req, res) => {
     try {
       db.prepare('DELETE FROM orixas WHERE id = ?').run(Number(req.params.id));
       res.json({ success: true });
@@ -127,12 +189,12 @@ async function startServer() {
     }
   });
 
-  app.get('/api/people', (req, res) => {
+  app.get('/api/people', authenticateToken, (req, res) => {
     const people = db.prepare('SELECT * FROM people').all();
     res.json(people);
   });
 
-  app.post('/api/people', (req, res) => {
+  app.post('/api/people', authenticateToken, (req, res) => {
     const p = req.body;
     
     // Check for duplicate CPF
@@ -144,7 +206,7 @@ async function startServer() {
     }
 
     const now = new Date().toISOString();
-    const user = 'Admin'; // Mocked user
+    const user = (req as any).user.full_name;
     const info = db.prepare(`
       INSERT INTO people (
         type, full_name, social_name, birth_date, cpf, phone, email,
@@ -161,7 +223,7 @@ async function startServer() {
     res.json({ id: info.lastInsertRowid });
   });
 
-  app.put('/api/people/:id', (req, res) => {
+  app.put('/api/people/:id', authenticateToken, (req, res) => {
     const p = req.body;
     
     // Check for duplicate CPF (excluding the current person)
@@ -173,7 +235,7 @@ async function startServer() {
     }
 
     const now = new Date().toISOString();
-    const user = 'Admin'; // Mocked user
+    const user = (req as any).user.full_name;
     db.prepare(`
       UPDATE people SET
         type = ?, full_name = ?, social_name = ?, birth_date = ?, cpf = ?, phone = ?, email = ?,
@@ -191,7 +253,7 @@ async function startServer() {
     res.json({ success: true });
   });
 
-  app.delete('/api/people/:id', (req, res) => {
+  app.delete('/api/people/:id', authenticateToken, (req, res) => {
     try {
       db.prepare('DELETE FROM people WHERE id = ?').run(Number(req.params.id));
       res.json({ success: true });

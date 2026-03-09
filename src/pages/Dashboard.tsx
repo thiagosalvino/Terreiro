@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Users, UserCheck, HeartHandshake } from 'lucide-react';
+import { apiFetch } from '../lib/api';
 
 export function Dashboard() {
   const [stats, setStats] = useState({
@@ -10,7 +11,7 @@ export function Dashboard() {
 
   useEffect(() => {
     // Fetch stats
-    fetch('/api/people')
+    apiFetch('/api/people')
       .then(res => res.json())
       .then(people => {
         setStats({
@@ -18,7 +19,8 @@ export function Dashboard() {
           activeMediums: people.filter((p: any) => p.type === 'medium' && p.active === 1).length,
           totalConsulentes: people.filter((p: any) => p.type === 'consulente').length,
         });
-      });
+      })
+      .catch(err => console.error(err));
   }, []);
 
   return (

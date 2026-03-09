@@ -1,6 +1,7 @@
 import { useState, useEffect, FormEvent } from 'react';
 import { Plus, Edit2, Trash2, Power, X } from 'lucide-react';
 import { Role } from '../types';
+import { apiFetch } from '../lib/api';
 
 export function Roles() {
   const [roles, setRoles] = useState<Role[]>([]);
@@ -11,7 +12,7 @@ export function Roles() {
   const [deleteError, setDeleteError] = useState('');
 
   const fetchRoles = async () => {
-    const res = await fetch('/api/roles');
+    const res = await apiFetch('/api/roles');
     const data = await res.json();
     setRoles(data);
   };
@@ -25,7 +26,7 @@ export function Roles() {
     const method = editingRole ? 'PUT' : 'POST';
     const url = editingRole ? `/api/roles/${editingRole.id}` : '/api/roles';
     
-    await fetch(url, {
+    await apiFetch(url, {
       method,
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(formData),
@@ -44,7 +45,7 @@ export function Roles() {
   };
 
   const toggleStatus = async (role: Role) => {
-    await fetch(`/api/roles/${role.id}`, {
+    await apiFetch(`/api/roles/${role.id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name: role.name, active: role.active === 1 ? false : true }),
@@ -60,7 +61,7 @@ export function Roles() {
   const confirmDelete = async () => {
     if (!roleToDelete) return;
     try {
-      const res = await fetch(`/api/roles/${roleToDelete}`, { method: 'DELETE' });
+      const res = await apiFetch(`/api/roles/${roleToDelete}`, { method: 'DELETE' });
       if (!res.ok) {
         const data = await res.json();
         setDeleteError(data.error || 'Erro ao excluir.');
