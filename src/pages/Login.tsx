@@ -30,9 +30,8 @@ export function Login() {
       localStorage.setItem('token', data.token);
       localStorage.setItem('user', JSON.stringify(data.user));
       
-      // Redirect to dashboard
-      navigate('/');
-      window.location.reload(); // Force reload to update sidebar/auth state
+      // Redirect to dashboard with full reload to ensure clean state
+      window.location.href = '/';
     } catch (err: any) {
       setError(err.message);
     } finally {
