@@ -1,17 +1,17 @@
 export interface Role {
-  id: number;
+  id: string;
   name: string;
-  active: number;
+  active: boolean;
 }
 
 export interface Orixa {
-  id: number;
+  id: string;
   name: string;
-  active: number;
+  active: boolean;
 }
 
 export interface Person {
-  id: number;
+  id: string;
   type: 'consulente' | 'medium';
   full_name: string;
   social_name: string | null;
@@ -27,12 +27,12 @@ export interface Person {
   city: string | null;
   state: string | null;
   entry_date: string | null;
-  role_id: number | null;
-  orixa1_id: number | null;
-  orixa2_id: number | null;
-  orixa3_id: number | null;
+  role_id: string | null;
+  orixa1_id: string | null;
+  orixa2_id: string | null;
+  orixa3_id: string | null;
   participation: 'umbanda' | 'candomble' | 'umbanda/candomble' | null;
-  active: number;
+  active: boolean;
   inactive_date: string | null;
   created_at?: string;
   updated_at?: string;
@@ -41,8 +41,9 @@ export interface Person {
 }
 
 export interface User {
-  id: number;
-  username: string;
-  full_name: string;
-  role: 'admin' | 'user';
+  uid: string;
+  email: string;
+  displayName: string | null;
+  role: 'admin' | 'medium' | 'consulente' | 'user';
+  status: 'pending' | 'approved' | 'denied';
 }

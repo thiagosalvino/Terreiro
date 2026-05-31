@@ -1,8 +1,10 @@
 import { useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, Users, UserCog, Sparkles, Menu, X, LogOut, User as UserIcon, Pin, PinOff } from 'lucide-react';
+import { LayoutDashboard, Users, UserCog, Sparkles, Megaphone, Briefcase, Wallet, Settings, Menu, X, LogOut, User as UserIcon, Pin, PinOff } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { User } from '../types';
+import { logout } from '../firebase';
+import { useAuth } from '../contexts/AuthContext';
 
 interface SidebarProps {
   isPinned: boolean;
@@ -10,26 +12,41 @@ interface SidebarProps {
 }
 
 export function Sidebar({ isPinned, onPinToggle }: SidebarProps) {
+  const { user } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
   const navigate = useNavigate();
-  const userJson = localStorage.getItem('user');
-  const user: User | null = userJson ? JSON.parse(userJson) : null;
 
   const effectiveOpen = isPinned || isOpen;
   const showOverlay = !isPinned && isOpen;
 
-  const handleLogout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
-    window.location.href = '/login';
+  const handleLogout = async () => {
+    try {
+      await logout();
+      navigate('/login');
+    } catch (error) {
+      console.error('Logout error:', error);
+    }
   };
 
   const navItems = [
-    { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
-    { to: '/pessoas', icon: Users, label: 'Médiuns/Consulentes' },
-    { to: '/cargos', icon: UserCog, label: 'Cargos da Casa' },
-    { to: '/orixas', icon: Sparkles, label: 'Orixás' },
+    { to: '/', icon: LayoutDashboard, label: 'Dashboard', roles: ['admin'] },
+    { to: '/mural', icon: Megaphone, label: 'Mural / Painel', roles: ['admin', 'medium', 'consulente'] },
+    { to: '/pessoas', icon: Users, label: 'Médiuns/Consulentes', roles: ['admin', 'medium', 'consulente'] },
+    { to: '/gestao-servicos', icon: Briefcase, label: 'Gestão de Serviços', roles: ['admin'] },
+    { to: '/gestao-financeira', icon: Wallet, label: 'Gestão Financeira', roles: ['admin'] },
+    { type: 'separator', roles: ['admin', 'medium'] },
+    { type: 'header', label: 'Cadastros Básicos', roles: ['admin', 'medium'] },
+    { to: '/cargos', icon: UserCog, label: 'Cargos da Casa', roles: ['admin', 'medium'] },
+    { to: '/servicos', icon: Settings, label: 'Serviços', roles: ['admin', 'medium'] },
+    { to: '/orixas', icon: Sparkles, label: 'Orixás', roles: ['admin', 'medium'] },
+    { to: '/usuarios', icon: UserIcon, label: 'Usuários', roles: ['admin'] },
   ];
+
+  const filteredNavItems = navItems.filter(item => {
+    if (!user) return false;
+    if (!item.roles) return true;
+    return item.roles.includes(user.role);
+  });
 
   return (
     <>
@@ -74,27 +91,41 @@ export function Sidebar({ isPinned, onPinToggle }: SidebarProps) {
           </button>
         </div>
 
-        <nav className="flex-1 px-4 py-6 space-y-2">
-          {navItems.map((item) => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              onClick={() => setIsOpen(false)}
-              className={({ isActive }) =>
-                cn(
-                  "flex items-center px-4 py-3 rounded-xl transition-colors",
-                  isActive
-                    ? "bg-amber-500/10 text-amber-500"
-                    : "text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100"
-                )
-              }
-            >
-              <item.icon size={20} className="min-w-[20px]" />
-              <span className="ml-3 font-medium transition-opacity">
-                {item.label}
-              </span>
-            </NavLink>
-          ))}
+        <nav className="flex-1 px-4 py-6 space-y-2 overflow-y-auto">
+          {filteredNavItems.map((item, index) => {
+            if (item.type === 'separator') {
+              return <div key={`sep-${index}`} className="my-4 border-t border-zinc-800" />;
+            }
+            if (item.type === 'header') {
+              return (
+                <div key={`header-${index}`} className="px-4 py-2">
+                  <span className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">
+                    {item.label}
+                  </span>
+                </div>
+              );
+            }
+            return (
+              <NavLink
+                key={item.to}
+                to={item.to || ''}
+                onClick={() => setIsOpen(false)}
+                className={({ isActive }) =>
+                  cn(
+                    "flex items-center px-4 py-3 rounded-xl transition-colors",
+                    isActive
+                      ? "bg-amber-500/10 text-amber-500"
+                      : "text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100"
+                  )
+                }
+              >
+                {item.icon && <item.icon size={20} className="min-w-[20px]" />}
+                <span className="ml-3 font-medium transition-opacity">
+                  {item.label}
+                </span>
+              </NavLink>
+            );
+          })}
         </nav>
 
         {/* User Profile & Logout */}
@@ -105,8 +136,8 @@ export function Sidebar({ isPinned, onPinToggle }: SidebarProps) {
                 <UserIcon size={20} />
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-bold text-zinc-100 truncate">{user.full_name}</p>
-                <p className="text-xs text-zinc-500 truncate">@{user.username}</p>
+                <p className="text-sm font-bold text-zinc-100 truncate">{user.displayName || 'Sem nome'}</p>
+                <p className="text-xs text-zinc-500 truncate">{user.email}</p>
               </div>
             </div>
           )}

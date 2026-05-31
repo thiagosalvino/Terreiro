@@ -1,0 +1,88 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile metadata",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "displayName": { "type": "string" },
+        "role": { "type": "string", "enum": ["admin", "user"] }
+      },
+      "required": ["uid", "email", "role"]
+    },
+    "Role": {
+      "title": "Role",
+      "description": "Cargos no terreiro",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "active": { "type": "boolean" }
+      },
+      "required": ["name", "active"]
+    },
+    "Orixa": {
+      "title": "Orixa",
+      "description": "Orixás",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "active": { "type": "boolean" }
+      },
+      "required": ["name", "active"]
+    },
+    "Person": {
+      "title": "Person",
+      "description": "Médiuns ou Consulentes",
+      "type": "object",
+      "properties": {
+        "type": { "type": "string", "enum": ["medium", "consulente"] },
+        "full_name": { "type": "string" },
+        "social_name": { "type": "string" },
+        "birth_date": { "type": "string" },
+        "cpf": { "type": "string" },
+        "phone": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "zip_code": { "type": "string" },
+        "address": { "type": "string" },
+        "number": { "type": "string" },
+        "complement": { "type": "string" },
+        "neighborhood": { "type": "string" },
+        "city": { "type": "string" },
+        "state": { "type": "string" },
+        "entry_date": { "type": "string" },
+        "role_id": { "type": "string" },
+        "orixa1_id": { "type": "string" },
+        "orixa2_id": { "type": "string" },
+        "orixa3_id": { "type": "string" },
+        "participation": { "type": "string" },
+        "active": { "type": "boolean" },
+        "inactive_date": { "type": "string" },
+        "created_at": { "type": "string" },
+        "updated_at": { "type": "string" },
+        "created_by": { "type": "string" },
+        "updated_by": { "type": "string" }
+      },
+      "required": ["type", "full_name", "active"]
+    }
+  },
+  "firestore": {
+    "/users/{uid}": {
+      "schema": "User",
+      "description": "User profile documents"
+    },
+    "/roles/{roleId}": {
+      "schema": "Role",
+      "description": "Roles collection"
+    },
+    "/orixas/{orixaId}": {
+      "schema": "Orixa",
+      "description": "Orixas collection"
+    },
+    "/people/{personId}": {
+      "schema": "Person",
+      "description": "People collection"
+    }
+  }
+}

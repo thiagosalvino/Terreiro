@@ -1,59 +1,74 @@
 import { useState, useEffect, FormEvent } from 'react';
-import { Plus, Edit2, Trash2, Power, X } from 'lucide-react';
+import { Plus, Edit2, Trash2, Power, X, ShieldAlert } from 'lucide-react';
+import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc } from 'firebase/firestore';
+import { db, handleFirestoreError, OperationType } from '../firebase';
 import { Role } from '../types';
-import { apiFetch } from '../lib/api';
+import { useAuth } from '../contexts/AuthContext';
 
 export function Roles() {
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'admin';
   const [roles, setRoles] = useState<Role[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingRole, setEditingRole] = useState<Role | null>(null);
   const [formData, setFormData] = useState({ name: '', active: true });
-  const [roleToDelete, setRoleToDelete] = useState<number | null>(null);
+  const [roleToDelete, setRoleToDelete] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState('');
 
-  const fetchRoles = async () => {
-    const res = await apiFetch('/api/roles');
-    const data = await res.json();
-    setRoles(data);
-  };
-
   useEffect(() => {
-    fetchRoles();
+    const unsubscribe = onSnapshot(collection(db, 'roles'), (snapshot) => {
+      const rolesData = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as Role[];
+      setRoles(rolesData);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'roles');
+    });
+
+    return () => unsubscribe();
   }, []);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    const method = editingRole ? 'PUT' : 'POST';
-    const url = editingRole ? `/api/roles/${editingRole.id}` : '/api/roles';
-    
-    await apiFetch(url, {
-      method,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(formData),
-    });
-    
-    setIsModalOpen(false);
-    setEditingRole(null);
-    setFormData({ name: '', active: true });
-    fetchRoles();
+    try {
+      if (editingRole) {
+        await updateDoc(doc(db, 'roles', editingRole.id), {
+          name: formData.name,
+          active: formData.active
+        });
+      } else {
+        await addDoc(collection(db, 'roles'), {
+          name: formData.name,
+          active: formData.active
+        });
+      }
+      
+      setIsModalOpen(false);
+      setEditingRole(null);
+      setFormData({ name: '', active: true });
+    } catch (error) {
+      handleFirestoreError(error, editingRole ? OperationType.UPDATE : OperationType.CREATE, 'roles');
+    }
   };
 
   const openEdit = (role: Role) => {
     setEditingRole(role);
-    setFormData({ name: role.name, active: role.active === 1 });
+    setFormData({ name: role.name, active: role.active });
     setIsModalOpen(true);
   };
 
   const toggleStatus = async (role: Role) => {
-    await apiFetch(`/api/roles/${role.id}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: role.name, active: role.active === 1 ? false : true }),
-    });
-    fetchRoles();
+    try {
+      await updateDoc(doc(db, 'roles', role.id), {
+        active: !role.active
+      });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `roles/${role.id}`);
+    }
   };
 
-  const handleDelete = (id: number) => {
+  const handleDelete = (id: string) => {
     setRoleToDelete(id);
     setDeleteError('');
   };
@@ -61,17 +76,12 @@ export function Roles() {
   const confirmDelete = async () => {
     if (!roleToDelete) return;
     try {
-      const res = await apiFetch(`/api/roles/${roleToDelete}`, { method: 'DELETE' });
-      if (!res.ok) {
-        const data = await res.json();
-        setDeleteError(data.error || 'Erro ao excluir.');
-        return;
-      }
-      fetchRoles();
+      await deleteDoc(doc(db, 'roles', roleToDelete));
       setRoleToDelete(null);
       setDeleteError('');
-    } catch (err) {
-      setDeleteError('Erro de conexão ao tentar excluir.');
+    } catch (error: any) {
+      setDeleteError('Erro ao excluir cargo. Verifique se existem dependências.');
+      handleFirestoreError(error, OperationType.DELETE, `roles/${roleToDelete}`);
     }
   };
 
@@ -79,17 +89,19 @@ export function Roles() {
     <div className="p-8 max-w-7xl mx-auto w-full">
       <div className="flex justify-between items-center mb-8">
         <h1 className="text-3xl font-bold text-zinc-900">Cargos da Casa</h1>
-        <button
-          onClick={() => {
-            setEditingRole(null);
-            setFormData({ name: '', active: true });
-            setIsModalOpen(true);
-          }}
-          className="flex items-center space-x-2 bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-xl transition-colors"
-        >
-          <Plus size={20} />
-          <span>Novo Cargo</span>
-        </button>
+        {isAdmin && (
+          <button
+            onClick={() => {
+              setEditingRole(null);
+              setFormData({ name: '', active: true });
+              setIsModalOpen(true);
+            }}
+            className="flex items-center space-x-2 bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-xl transition-colors"
+          >
+            <Plus size={20} />
+            <span>Novo Cargo</span>
+          </button>
+        )}
       </div>
 
       <div className="bg-white rounded-2xl shadow-sm border border-zinc-100 overflow-hidden">
@@ -111,15 +123,24 @@ export function Roles() {
                   </span>
                 </td>
                 <td className="p-4 flex justify-end space-x-2">
-                  <button onClick={() => openEdit(role)} className="p-2 text-zinc-400 hover:text-blue-600 transition-colors" title="Editar">
-                    <Edit2 size={18} />
-                  </button>
-                  <button onClick={() => toggleStatus(role)} className="p-2 text-zinc-400 hover:text-amber-600 transition-colors" title={role.active ? "Inativar" : "Ativar"}>
-                    <Power size={18} />
-                  </button>
-                  <button onClick={() => handleDelete(role.id)} className="p-2 text-zinc-400 hover:text-red-600 transition-colors" title="Excluir">
-                    <Trash2 size={18} />
-                  </button>
+                  {isAdmin ? (
+                    <>
+                      <button onClick={() => openEdit(role)} className="p-2 text-zinc-400 hover:text-blue-600 transition-colors" title="Editar">
+                        <Edit2 size={18} />
+                      </button>
+                      <button onClick={() => toggleStatus(role)} className="p-2 text-zinc-400 hover:text-amber-600 transition-colors" title={role.active ? "Inativar" : "Ativar"}>
+                        <Power size={18} />
+                      </button>
+                      <button onClick={() => handleDelete(role.id)} className="p-2 text-zinc-400 hover:text-red-600 transition-colors" title="Excluir">
+                        <Trash2 size={18} />
+                      </button>
+                    </>
+                  ) : (
+                    <span className="text-zinc-400 text-xs italic flex items-center space-x-1 p-2">
+                      <ShieldAlert size={14} />
+                      <span>Somente leitura</span>
+                    </span>
+                  )}
                 </td>
               </tr>
             ))}

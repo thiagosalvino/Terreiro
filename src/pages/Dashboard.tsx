@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Users, UserCheck, HeartHandshake } from 'lucide-react';
-import { apiFetch } from '../lib/api';
+import { db, handleFirestoreError, OperationType } from '../firebase';
+import { collection, onSnapshot } from 'firebase/firestore';
+import { Person } from '../types';
 
 export function Dashboard() {
   const [stats, setStats] = useState({
@@ -10,17 +12,16 @@ export function Dashboard() {
   });
 
   useEffect(() => {
-    // Fetch stats
-    apiFetch('/api/people')
-      .then(res => res.json())
-      .then(people => {
-        setStats({
-          totalPeople: people.length,
-          activeMediums: people.filter((p: any) => p.type === 'medium' && p.active === 1).length,
-          totalConsulentes: people.filter((p: any) => p.type === 'consulente').length,
-        });
-      })
-      .catch(err => console.error(err));
+    const unsubscribe = onSnapshot(collection(db, 'people'), (snapshot) => {
+      const people = snapshot.docs.map(doc => doc.data() as Person);
+      setStats({
+        totalPeople: people.length,
+        activeMediums: people.filter((p) => p.type === 'medium' && p.active).length,
+        totalConsulentes: people.filter((p) => p.type === 'consulente').length,
+      });
+    }, (error) => handleFirestoreError(error, OperationType.GET, 'people'));
+
+    return () => unsubscribe();
   }, []);
 
   return (

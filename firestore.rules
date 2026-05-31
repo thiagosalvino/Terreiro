@@ -1,0 +1,124 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: users
+    // Fields: uid (string), email (string), displayName (string), role (string), status (string)
+    //
+    // Collection: roles
+    // Fields: name (string), active (bool)
+    //
+    // Collection: orixas
+    // Fields: name (string), active (bool)
+    //
+    // Collection: people
+    // Fields: type (string), full_name (string), social_name (string), birth_date (string), 
+    //         cpf (string), phone (string), email (string), zip_code (string), 
+    //         address (string), number (string), complement (string), neighborhood (string), 
+    //         city (string), state (string), entry_date (string), role_id (string), 
+    //         orixa1_id (string), orixa2_id (string), orixa3_id (string), participation (string), 
+    //         active (bool), inactive_date (string), created_at (string), updated_at (string), 
+    //         created_by (string), updated_by (string)
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() &&
+        ((exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin') ||
+         request.auth.token.email == "thiagosalvinots2020@gmail.com");
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function hasOnlyAllowedFields(fields) {
+      return request.resource.data.keys().hasOnly(fields);
+    }
+
+    function isValidEmail(email) {
+      return email is string && email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+    }
+
+    // ===============================================================
+    // Domain Validators
+    // ===============================================================
+
+    function isValidUser(data) {
+      return hasOnlyAllowedFields(['uid', 'email', 'displayName', 'role', 'status']) &&
+             data.uid is string && data.uid.size() > 0 &&
+             data.email is string && isValidEmail(data.email) &&
+             data.role in ['admin', 'user', 'medium', 'consulente'] &&
+             data.status in ['pending', 'approved', 'denied'];
+    }
+
+    function isValidRole(data) {
+      return hasOnlyAllowedFields(['name', 'active']) &&
+             data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
+             data.active is bool;
+    }
+
+    function isValidOrixa(data) {
+      return hasOnlyAllowedFields(['name', 'active']) &&
+             data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
+             data.active is bool;
+    }
+
+    function isValidPerson(data) {
+      return data.type in ['medium', 'consulente'] &&
+             data.full_name is string && data.full_name.size() > 0 && data.full_name.size() < 200 &&
+             data.active is bool &&
+             (!('email' in data) || data.email == null || data.email == "" || isValidEmail(data.email));
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /users/{uid} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && isOwner(uid) && isValidUser(request.resource.data) && 
+                    (
+                      isAdmin() || 
+                      (request.resource.data.role == 'consulente' && request.resource.data.status == 'approved') ||
+                      (request.resource.data.role in ['medium', 'user'] && request.resource.data.status == 'pending')
+                    );
+      allow update: if isAuthenticated() && (isOwner(uid) || isAdmin()) && isValidUser(request.resource.data) &&
+                    (request.resource.data.role == resource.data.role || isAdmin()) &&
+                    (request.resource.data.status == resource.data.status || isAdmin());
+      allow delete: if isAdmin();
+    }
+
+    match /roles/{roleId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin() && (request.method == 'delete' || isValidRole(request.resource.data));
+    }
+
+    match /orixas/{orixaId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin() && (request.method == 'delete' || isValidOrixa(request.resource.data));
+    }
+
+    match /people/{personId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && (request.method == 'delete' || isValidPerson(request.resource.data));
+    }
+
+    // Default deny
+    match /{path=**} {
+      allow read, write: if false;
+    }
+  }
+}

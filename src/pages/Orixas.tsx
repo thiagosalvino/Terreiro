@@ -1,59 +1,74 @@
 import { useState, useEffect, FormEvent } from 'react';
-import { Plus, Edit2, Trash2, Power, X } from 'lucide-react';
+import { Plus, Edit2, Trash2, Power, X, ShieldAlert } from 'lucide-react';
+import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc } from 'firebase/firestore';
+import { db, handleFirestoreError, OperationType } from '../firebase';
 import { Orixa } from '../types';
-import { apiFetch } from '../lib/api';
+import { useAuth } from '../contexts/AuthContext';
 
 export function Orixas() {
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'admin';
   const [orixas, setOrixas] = useState<Orixa[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingOrixa, setEditingOrixa] = useState<Orixa | null>(null);
   const [formData, setFormData] = useState({ name: '', active: true });
-  const [orixaToDelete, setOrixaToDelete] = useState<number | null>(null);
+  const [orixaToDelete, setOrixaToDelete] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState('');
 
-  const fetchOrixas = async () => {
-    const res = await apiFetch('/api/orixas');
-    const data = await res.json();
-    setOrixas(data);
-  };
-
   useEffect(() => {
-    fetchOrixas();
+    const unsubscribe = onSnapshot(collection(db, 'orixas'), (snapshot) => {
+      const orixasData = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as Orixa[];
+      setOrixas(orixasData);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'orixas');
+    });
+
+    return () => unsubscribe();
   }, []);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    const method = editingOrixa ? 'PUT' : 'POST';
-    const url = editingOrixa ? `/api/orixas/${editingOrixa.id}` : '/api/orixas';
-    
-    await apiFetch(url, {
-      method,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(formData),
-    });
-    
-    setIsModalOpen(false);
-    setEditingOrixa(null);
-    setFormData({ name: '', active: true });
-    fetchOrixas();
+    try {
+      if (editingOrixa) {
+        await updateDoc(doc(db, 'orixas', editingOrixa.id), {
+          name: formData.name,
+          active: formData.active
+        });
+      } else {
+        await addDoc(collection(db, 'orixas'), {
+          name: formData.name,
+          active: formData.active
+        });
+      }
+      
+      setIsModalOpen(false);
+      setEditingOrixa(null);
+      setFormData({ name: '', active: true });
+    } catch (error) {
+      handleFirestoreError(error, editingOrixa ? OperationType.UPDATE : OperationType.CREATE, 'orixas');
+    }
   };
 
   const openEdit = (orixa: Orixa) => {
     setEditingOrixa(orixa);
-    setFormData({ name: orixa.name, active: orixa.active === 1 });
+    setFormData({ name: orixa.name, active: orixa.active });
     setIsModalOpen(true);
   };
 
   const toggleStatus = async (orixa: Orixa) => {
-    await apiFetch(`/api/orixas/${orixa.id}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: orixa.name, active: orixa.active === 1 ? false : true }),
-    });
-    fetchOrixas();
+    try {
+      await updateDoc(doc(db, 'orixas', orixa.id), {
+        active: !orixa.active
+      });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `orixas/${orixa.id}`);
+    }
   };
 
-  const handleDelete = (id: number) => {
+  const handleDelete = (id: string) => {
     setOrixaToDelete(id);
     setDeleteError('');
   };
@@ -61,17 +76,12 @@ export function Orixas() {
   const confirmDelete = async () => {
     if (!orixaToDelete) return;
     try {
-      const res = await apiFetch(`/api/orixas/${orixaToDelete}`, { method: 'DELETE' });
-      if (!res.ok) {
-        const data = await res.json();
-        setDeleteError(data.error || 'Erro ao excluir.');
-        return;
-      }
-      fetchOrixas();
+      await deleteDoc(doc(db, 'orixas', orixaToDelete));
       setOrixaToDelete(null);
       setDeleteError('');
-    } catch (err) {
-      setDeleteError('Erro de conexão ao tentar excluir.');
+    } catch (error: any) {
+      setDeleteError('Erro ao excluir orixá. Verifique se existem dependências.');
+      handleFirestoreError(error, OperationType.DELETE, `orixas/${orixaToDelete}`);
     }
   };
 
@@ -79,17 +89,19 @@ export function Orixas() {
     <div className="p-8 max-w-7xl mx-auto w-full">
       <div className="flex justify-between items-center mb-8">
         <h1 className="text-3xl font-bold text-zinc-900">Orixás</h1>
-        <button
-          onClick={() => {
-            setEditingOrixa(null);
-            setFormData({ name: '', active: true });
-            setIsModalOpen(true);
-          }}
-          className="flex items-center space-x-2 bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-xl transition-colors"
-        >
-          <Plus size={20} />
-          <span>Novo Orixá</span>
-        </button>
+        {isAdmin && (
+          <button
+            onClick={() => {
+              setEditingOrixa(null);
+              setFormData({ name: '', active: true });
+              setIsModalOpen(true);
+            }}
+            className="flex items-center space-x-2 bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-xl transition-colors"
+          >
+            <Plus size={20} />
+            <span>Novo Orixá</span>
+          </button>
+        )}
       </div>
 
       <div className="bg-white rounded-2xl shadow-sm border border-zinc-100 overflow-hidden">
@@ -111,15 +123,24 @@ export function Orixas() {
                   </span>
                 </td>
                 <td className="p-4 flex justify-end space-x-2">
-                  <button onClick={() => openEdit(orixa)} className="p-2 text-zinc-400 hover:text-blue-600 transition-colors" title="Editar">
-                    <Edit2 size={18} />
-                  </button>
-                  <button onClick={() => toggleStatus(orixa)} className="p-2 text-zinc-400 hover:text-amber-600 transition-colors" title={orixa.active ? "Inativar" : "Ativar"}>
-                    <Power size={18} />
-                  </button>
-                  <button onClick={() => handleDelete(orixa.id)} className="p-2 text-zinc-400 hover:text-red-600 transition-colors" title="Excluir">
-                    <Trash2 size={18} />
-                  </button>
+                  {isAdmin ? (
+                    <>
+                      <button onClick={() => openEdit(orixa)} className="p-2 text-zinc-400 hover:text-blue-600 transition-colors" title="Editar">
+                        <Edit2 size={18} />
+                      </button>
+                      <button onClick={() => toggleStatus(orixa)} className="p-2 text-zinc-400 hover:text-amber-600 transition-colors" title={orixa.active ? "Inativar" : "Ativar"}>
+                        <Power size={18} />
+                      </button>
+                      <button onClick={() => handleDelete(orixa.id)} className="p-2 text-zinc-400 hover:text-red-600 transition-colors" title="Excluir">
+                        <Trash2 size={18} />
+                      </button>
+                    </>
+                  ) : (
+                    <span className="text-zinc-400 text-xs italic flex items-center space-x-1 p-2">
+                      <ShieldAlert size={14} />
+                      <span>Somente leitura</span>
+                    </span>
+                  )}
                 </td>
               </tr>
             ))}

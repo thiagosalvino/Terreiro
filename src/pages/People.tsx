@@ -1,7 +1,19 @@
 import { useState, useEffect, FormEvent, ChangeEvent } from 'react';
-import { Plus, Edit2, Trash2, Power, X, MessageCircle, Search, Filter } from 'lucide-react';
+import { Plus, Edit2, Trash2, Power, X, MessageCircle, Search, Filter, ShieldAlert } from 'lucide-react';
 import { Person, Role, Orixa } from '../types';
-import { apiFetch } from '../lib/api';
+import { db, auth, handleFirestoreError, OperationType } from '../firebase';
+import { useAuth } from '../contexts/AuthContext';
+import { 
+  collection, 
+  onSnapshot, 
+  addDoc, 
+  updateDoc, 
+  deleteDoc, 
+  doc, 
+  query, 
+  orderBy,
+  serverTimestamp 
+} from 'firebase/firestore';
 
 const initialFormData: Omit<Person, 'id'> = {
   type: 'consulente',
@@ -24,11 +36,13 @@ const initialFormData: Omit<Person, 'id'> = {
   orixa2_id: null,
   orixa3_id: null,
   participation: null,
-  active: 1,
+  active: true,
   inactive_date: '',
 };
 
 export function People() {
+  const { user } = useAuth();
+  const canEdit = user?.role === 'admin' || user?.role === 'medium';
   const [people, setPeople] = useState<Person[]>([]);
   const [roles, setRoles] = useState<Role[]>([]);
   const [orixas, setOrixas] = useState<Orixa[]>([]);
@@ -39,7 +53,7 @@ export function People() {
   const [cpfError, setCpfError] = useState('');
   const [emailError, setEmailError] = useState('');
   const [noNumber, setNoNumber] = useState(false);
-  const [personToDelete, setPersonToDelete] = useState<number | null>(null);
+  const [personToDelete, setPersonToDelete] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState('');
 
   // New states for filtering
@@ -120,19 +134,39 @@ export function People() {
     }
   };
 
-  const fetchData = async () => {
-    const [pRes, rRes, oRes] = await Promise.all([
-      apiFetch('/api/people'),
-      apiFetch('/api/roles'),
-      apiFetch('/api/orixas')
-    ]);
-    setPeople(await pRes.json());
-    setRoles(await rRes.json());
-    setOrixas(await oRes.json());
-  };
-
   useEffect(() => {
-    fetchData();
+    const qPeople = query(collection(db, 'people'), orderBy('full_name'));
+    const unsubscribePeople = onSnapshot(qPeople, (snapshot) => {
+      const peopleData = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as Person[];
+      setPeople(peopleData);
+    }, (error) => handleFirestoreError(error, OperationType.GET, 'people'));
+
+    const qRoles = query(collection(db, 'roles'), orderBy('name'));
+    const unsubscribeRoles = onSnapshot(qRoles, (snapshot) => {
+      const rolesData = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as Role[];
+      setRoles(rolesData);
+    }, (error) => handleFirestoreError(error, OperationType.GET, 'roles'));
+
+    const qOrixas = query(collection(db, 'orixas'), orderBy('name'));
+    const unsubscribeOrixas = onSnapshot(qOrixas, (snapshot) => {
+      const orixasData = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as Orixa[];
+      setOrixas(orixasData);
+    }, (error) => handleFirestoreError(error, OperationType.GET, 'orixas'));
+
+    return () => {
+      unsubscribePeople();
+      unsubscribeRoles();
+      unsubscribeOrixas();
+    };
   }, []);
 
   const handleSubmit = async (e: FormEvent) => {
@@ -155,37 +189,34 @@ export function People() {
 
     if (hasError) return;
 
-    const method = editingPerson ? 'PUT' : 'POST';
-    const url = editingPerson ? `/api/people/${editingPerson.id}` : '/api/people';
-    
     try {
-      const res = await apiFetch(url, {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData),
-      });
+      const data = {
+        ...formData,
+        updated_at: new Date().toISOString(),
+        updated_by: auth.currentUser?.email || 'unknown',
+      };
 
-      if (!res.ok) {
-        const data = await res.json();
-        if (data.error && data.error.includes('CPF')) {
-          setCpfError(data.error);
-          return; // Stop execution if there's a CPF error from backend
-        }
-        throw new Error(data.error || 'Erro ao salvar cadastro');
+      if (editingPerson) {
+        await updateDoc(doc(db, 'people', editingPerson.id), data);
+      } else {
+        await addDoc(collection(db, 'people'), {
+          ...data,
+          created_at: new Date().toISOString(),
+          created_by: auth.currentUser?.email || 'unknown',
+        });
       }
       
       setIsModalOpen(false);
       setEditingPerson(null);
       setFormData(initialFormData);
-      fetchData();
     } catch (err) {
       console.error(err);
+      handleFirestoreError(err, (editingPerson ? OperationType.UPDATE : OperationType.CREATE), 'people');
       alert('Ocorreu um erro ao salvar o cadastro. Tente novamente.');
     }
   };
 
-  const openEdit = async (person: Person) => {
-    await fetchData();
+  const openEdit = (person: Person) => {
     setCpfError('');
     setEmailError('');
     setEditingPerson(person);
@@ -218,22 +249,27 @@ export function People() {
   };
 
   const toggleStatus = async (person: Person) => {
-    const updatedPerson = { ...person, active: person.active === 1 ? 0 : 1 };
-    if (updatedPerson.active === 0) {
-      updatedPerson.inactive_date = new Date().toISOString().split('T')[0];
-    } else {
-      updatedPerson.inactive_date = null;
+    try {
+      const newActive = !person.active;
+      const updateData: Partial<Person> = { 
+        active: newActive,
+        updated_at: new Date().toISOString(),
+        updated_by: auth.currentUser?.email || 'unknown',
+      };
+      
+      if (!newActive) {
+        updateData.inactive_date = new Date().toISOString().split('T')[0];
+      } else {
+        updateData.inactive_date = null;
+      }
+      
+      await updateDoc(doc(db, 'people', person.id), updateData);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, 'people');
     }
-    
-    await apiFetch(`/api/people/${person.id}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(updatedPerson),
-    });
-    fetchData();
   };
 
-  const handleDelete = (id: number) => {
+  const handleDelete = (id: string) => {
     setPersonToDelete(id);
     setDeleteError('');
   };
@@ -241,17 +277,12 @@ export function People() {
   const confirmDelete = async () => {
     if (!personToDelete) return;
     try {
-      const res = await apiFetch(`/api/people/${personToDelete}`, { method: 'DELETE' });
-      if (!res.ok) {
-        const data = await res.json();
-        setDeleteError(data.error || 'Erro ao excluir.');
-        return;
-      }
-      fetchData();
+      await deleteDoc(doc(db, 'people', personToDelete));
       setPersonToDelete(null);
       setDeleteError('');
     } catch (err) {
-      setDeleteError('Erro de conexão ao tentar excluir.');
+      handleFirestoreError(err, OperationType.DELETE, 'people');
+      setDeleteError('Erro ao excluir.');
     }
   };
 
@@ -271,21 +302,22 @@ export function People() {
     <div className="p-8 max-w-7xl mx-auto w-full">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
         <h1 className="text-3xl font-bold text-zinc-900">Médiuns e Consulentes</h1>
-        <button
-          onClick={() => {
-            setCpfError('');
-            setEmailError('');
-            setEditingPerson(null);
-            setFormData(initialFormData);
-            setNoNumber(false);
-            fetchData();
-            setIsModalOpen(true);
-          }}
-          className="flex items-center space-x-2 bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-xl transition-colors whitespace-nowrap"
-        >
-          <Plus size={20} />
-          <span>Nova Pessoa</span>
-        </button>
+        {canEdit && (
+          <button
+            onClick={() => {
+              setCpfError('');
+              setEmailError('');
+              setEditingPerson(null);
+              setFormData(initialFormData);
+              setNoNumber(false);
+              setIsModalOpen(true);
+            }}
+            className="flex items-center space-x-2 bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-xl transition-colors whitespace-nowrap"
+          >
+            <Plus size={20} />
+            <span>Nova Pessoa</span>
+          </button>
+        )}
       </div>
 
       {/* Filters Section */}
@@ -371,15 +403,24 @@ export function People() {
                     </span>
                   </td>
                   <td className="p-4 flex justify-end space-x-2">
-                    <button onClick={() => openEdit(person)} className="p-2 text-zinc-400 hover:text-blue-600 transition-colors" title="Editar">
-                      <Edit2 size={18} />
-                    </button>
-                    <button onClick={() => toggleStatus(person)} className="p-2 text-zinc-400 hover:text-amber-600 transition-colors" title={person.active ? "Inativar" : "Ativar"}>
-                      <Power size={18} />
-                    </button>
-                    <button onClick={() => handleDelete(person.id)} className="p-2 text-zinc-400 hover:text-red-600 transition-colors" title="Excluir">
-                      <Trash2 size={18} />
-                    </button>
+                    {canEdit ? (
+                      <>
+                        <button onClick={() => openEdit(person)} className="p-2 text-zinc-400 hover:text-blue-600 transition-colors" title="Editar">
+                          <Edit2 size={18} />
+                        </button>
+                        <button onClick={() => toggleStatus(person)} className="p-2 text-zinc-400 hover:text-amber-600 transition-colors" title={person.active ? "Inativar" : "Ativar"}>
+                          <Power size={18} />
+                        </button>
+                        <button onClick={() => handleDelete(person.id)} className="p-2 text-zinc-400 hover:text-red-600 transition-colors" title="Excluir">
+                          <Trash2 size={18} />
+                        </button>
+                      </>
+                    ) : (
+                      <span className="text-zinc-400 text-xs italic flex items-center space-x-1 p-2">
+                        <ShieldAlert size={14} />
+                        <span>Somente leitura</span>
+                      </span>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -542,36 +583,36 @@ export function People() {
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-zinc-700 mb-1">Cargo na Casa</label>
-                      <select value={formData.role_id || ''} onChange={(e) => setFormData({ ...formData, role_id: e.target.value ? Number(e.target.value) : null })} className="w-full px-4 py-2 border border-zinc-200 rounded-xl focus:ring-2 focus:ring-amber-500 outline-none bg-white">
+                      <select value={formData.role_id || ''} onChange={(e) => setFormData({ ...formData, role_id: e.target.value || null })} className="w-full px-4 py-2 border border-zinc-200 rounded-xl focus:ring-2 focus:ring-amber-500 outline-none bg-white">
                         <option value="">Selecione um cargo</option>
-                        {roles.filter(r => r.active !== 0).map(r => (
+                        {roles.filter(r => r.active).map(r => (
                           <option key={r.id} value={r.id}>{r.name}</option>
                         ))}
                       </select>
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-zinc-700 mb-1">Orixá 1</label>
-                      <select value={formData.orixa1_id || ''} onChange={(e) => setFormData({ ...formData, orixa1_id: e.target.value ? Number(e.target.value) : null })} className="w-full px-4 py-2 border border-zinc-200 rounded-xl focus:ring-2 focus:ring-amber-500 outline-none bg-white">
+                      <select value={formData.orixa1_id || ''} onChange={(e) => setFormData({ ...formData, orixa1_id: e.target.value || null })} className="w-full px-4 py-2 border border-zinc-200 rounded-xl focus:ring-2 focus:ring-amber-500 outline-none bg-white">
                         <option value="">Selecione um orixá</option>
-                        {orixas.filter(o => o.active !== 0).map(o => (
+                        {orixas.filter(o => o.active).map(o => (
                           <option key={o.id} value={o.id}>{o.name}</option>
                         ))}
                       </select>
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-zinc-700 mb-1">Orixá 2</label>
-                      <select value={formData.orixa2_id || ''} onChange={(e) => setFormData({ ...formData, orixa2_id: e.target.value ? Number(e.target.value) : null })} className="w-full px-4 py-2 border border-zinc-200 rounded-xl focus:ring-2 focus:ring-amber-500 outline-none bg-white">
+                      <select value={formData.orixa2_id || ''} onChange={(e) => setFormData({ ...formData, orixa2_id: e.target.value || null })} className="w-full px-4 py-2 border border-zinc-200 rounded-xl focus:ring-2 focus:ring-amber-500 outline-none bg-white">
                         <option value="">Selecione um orixá</option>
-                        {orixas.filter(o => o.active !== 0).map(o => (
+                        {orixas.filter(o => o.active).map(o => (
                           <option key={o.id} value={o.id}>{o.name}</option>
                         ))}
                       </select>
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-zinc-700 mb-1">Orixá 3</label>
-                      <select value={formData.orixa3_id || ''} onChange={(e) => setFormData({ ...formData, orixa3_id: e.target.value ? Number(e.target.value) : null })} className="w-full px-4 py-2 border border-zinc-200 rounded-xl focus:ring-2 focus:ring-amber-500 outline-none bg-white">
+                      <select value={formData.orixa3_id || ''} onChange={(e) => setFormData({ ...formData, orixa3_id: e.target.value || null })} className="w-full px-4 py-2 border border-zinc-200 rounded-xl focus:ring-2 focus:ring-amber-500 outline-none bg-white">
                         <option value="">Selecione um orixá</option>
-                        {orixas.filter(o => o.active !== 0).map(o => (
+                        {orixas.filter(o => o.active).map(o => (
                           <option key={o.id} value={o.id}>{o.name}</option>
                         ))}
                       </select>
@@ -592,12 +633,12 @@ export function People() {
                       <label className="flex items-center space-x-2">
                         <input
                           type="checkbox"
-                          checked={formData.active === 1}
+                          checked={formData.active}
                           onChange={(e) => {
                             const isActive = e.target.checked;
                             setFormData({ 
                               ...formData, 
-                              active: isActive ? 1 : 0,
+                              active: isActive,
                               inactive_date: isActive ? '' : new Date().toISOString().split('T')[0]
                             });
                           }}
@@ -606,7 +647,7 @@ export function People() {
                         <span className="text-sm font-medium text-zinc-700">Médium Ativo</span>
                       </label>
 
-                      {formData.active === 0 && (
+                      {!formData.active && (
                         <div className="flex-1 max-w-xs">
                           <label className="block text-sm font-medium text-zinc-700 mb-1">Data de Inativação</label>
                           <input 
